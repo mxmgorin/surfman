@@ -87,9 +87,6 @@ impl Device {
         &self,
         attributes: &ContextAttributes,
     ) -> Result<ContextDescriptor, Error> {
-        // Set environment variables as appropriate.
-        self.adapter.set_environment_variables();
-
         unsafe {
             ContextDescriptor::new(
                 self.native_connection.egl_display,
