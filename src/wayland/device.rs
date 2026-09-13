@@ -95,6 +95,14 @@ impl Device {
         // Set environment variables as appropriate.
         self.adapter.set_environment_variables();
 
+        // A GLES-only driver has no desktop-GL config, and eglChooseConfig requires
+        // every requested bit — so neither OPENGL_BIT nor ES3 can be assumed.
+        let renderable_type = match self.gl_api() {
+            GLApi::GL => egl::OPENGL_BIT,
+            GLApi::GLES if attributes.version.major >= 3 => egl::OPENGL_ES3_BIT,
+            GLApi::GLES => egl::OPENGL_ES2_BIT,
+        };
+
         unsafe {
             ContextDescriptor::new(
                 self.native_connection.egl_display,
@@ -103,7 +111,7 @@ impl Device {
                     egl::SURFACE_TYPE as EGLint,
                     egl::WINDOW_BIT as EGLint,
                     egl::RENDERABLE_TYPE as EGLint,
-                    egl::OPENGL_BIT as EGLint,
+                    renderable_type as EGLint,
                 ],
             )
         }
