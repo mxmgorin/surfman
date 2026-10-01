@@ -14,10 +14,12 @@ use crate::{Gl, SurfaceInfo};
 use euclid::default::Size2D;
 use glow::HasContext;
 
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
+#[cfg(not(target_os = "windows"))]
+use std::sync::LazyLock;
 use std::thread;
 
 #[allow(dead_code)]
@@ -631,11 +633,48 @@ pub(crate) unsafe fn egl_config_from_id(
 }
 
 pub(crate) fn get_proc_address(symbol_name: &str) -> *const c_void {
-    EGL_FUNCTIONS.with(|egl| unsafe {
-        let symbol_name: CString = CString::new(symbol_name).unwrap();
-        egl.GetProcAddress(symbol_name.as_ptr()).cast()
-    })
+    let symbol_name: CString = CString::new(symbol_name).unwrap();
+    let symbol = EGL_FUNCTIONS.with(|egl| unsafe { egl.GetProcAddress(symbol_name.as_ptr()) });
+    if !symbol.is_null() {
+        return symbol.cast();
+    }
+    gl_library_symbol(&symbol_name)
 }
+
+/// Before EGL 1.5, `eglGetProcAddress` may return NULL for core GL functions unless the
+/// display offers `EGL_KHR_get_all_proc_addresses`; those are exported by the GL library.
+#[cfg(not(target_os = "windows"))]
+fn gl_library_symbol(symbol_name: &CStr) -> *const c_void {
+    static GL_LIBRARY: LazyLock<GLLibraryWrapper> = LazyLock::new(|| {
+        let handle = GL_POTENTIAL_SO_NAMES
+            .iter()
+            .map(|soname| unsafe { libc::dlopen(soname.as_ptr(), libc::RTLD_LAZY) })
+            .find(|handle| !handle.is_null())
+            .unwrap_or(ptr::null_mut());
+        GLLibraryWrapper(handle)
+    });
+
+    if GL_LIBRARY.0.is_null() {
+        return ptr::null();
+    }
+    unsafe { libc::dlsym(GL_LIBRARY.0, symbol_name.as_ptr()).cast_const() }
+}
+
+#[cfg(target_os = "windows")]
+fn gl_library_symbol(_: &CStr) -> *const c_void {
+    ptr::null()
+}
+
+#[cfg(not(target_os = "windows"))]
+static GL_POTENTIAL_SO_NAMES: [&CStr; 2] = [c"libGLESv2.so.2", c"libGLESv2.so"];
+
+#[cfg(not(target_os = "windows"))]
+struct GLLibraryWrapper(*mut c_void);
+
+#[cfg(not(target_os = "windows"))]
+unsafe impl Send for GLLibraryWrapper {}
+#[cfg(not(target_os = "windows"))]
+unsafe impl Sync for GLLibraryWrapper {}
 
 // Creates and returns a dummy pbuffer surface for the given context. This is used as the default
 // framebuffer on some backends.
