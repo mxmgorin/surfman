@@ -4,7 +4,7 @@ use super::connection::{Connection, NativeConnectionWrapper};
 use super::context::{Context, ContextDescriptor, NativeContext};
 use super::surface::Surface;
 use crate::base::egl::{
-    context::{self, CurrentContextGuard, EGLBackedContext},
+    context::{self, CurrentContextGuard, DefaultFramebuffer, EGLBackedContext},
     surface::EGLBackedSurface,
 };
 use crate::context::ContextID;
@@ -117,6 +117,7 @@ impl Device {
                 descriptor,
                 share_with.map(|ctx| &ctx.0),
                 self.gl_api(),
+                DefaultFramebuffer::DummyPbuffer,
             )?;
             context.make_current(self.native_connection.egl_display)?;
             Ok(Context(

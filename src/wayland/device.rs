@@ -3,7 +3,7 @@
 use super::connection::{Connection, NativeConnectionWrapper};
 use super::context::{Context, ContextDescriptor, NativeContext};
 use super::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture};
-use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
+use crate::base::egl::context::{self, CurrentContextGuard, DefaultFramebuffer, EGLBackedContext};
 use crate::base::egl::surface::EGLBackedSurface;
 use crate::context::ContextID;
 use crate::egl;
@@ -130,6 +130,7 @@ impl Device {
                 descriptor,
                 share_with.map(|ctx| &ctx.0),
                 self.gl_api(),
+                DefaultFramebuffer::DummyPbuffer,
             )?;
             context.make_current(self.native_connection.egl_display)?;
             Ok(Context(
