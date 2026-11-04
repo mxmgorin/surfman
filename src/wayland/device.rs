@@ -125,14 +125,18 @@ impl Device {
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
         unsafe {
-            let context = EGLBackedContext::new(
+            let mut context = EGLBackedContext::new(
                 self.native_connection.egl_display,
                 descriptor,
                 share_with.map(|ctx| &ctx.0),
                 self.gl_api(),
                 DefaultFramebuffer::DummyPbuffer,
             )?;
-            context.make_current(self.native_connection.egl_display)?;
+            if let Err(err) = context.make_current(self.native_connection.egl_display) {
+                // A context dropped without `destroy` panics.
+                context.destroy(self.native_connection.egl_display);
+                return Err(err);
+            }
             Ok(Context(
                 context,
                 Gl::from_loader_function(context::get_proc_address),
